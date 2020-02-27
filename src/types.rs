@@ -1,5 +1,5 @@
 // pub use plonk_abi::Proof;
-use phoenix_lib::{
+use phoenix::{
     CompressedRistretto, Nonce, NoteUtxoType, NoteVariant, Nullifier, ObfuscatedNote,
     RistrettoPoint, Scalar, TransactionItem, TransparentNote,
 };

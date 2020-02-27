@@ -1,6 +1,6 @@
 #![no_std]
 mod types;
-use phoenix_lib::MAX_NOTES_PER_TRANSACTION;
+use phoenix::MAX_NOTES_PER_TRANSACTION;
 pub use types::{Item, ITEM_SIZE, PROOF_SIZE};
 
 mod external {
