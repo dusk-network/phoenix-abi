@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 
 serde = { version = "1.0", features = ["derive"] }
-phoenix-lib = { path = "../phoenix" }
+phoenix = { git = "ssh://git@github.com/dusk-network/phoenix.git" }
