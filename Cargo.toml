@@ -8,5 +8,10 @@ edition = "2018"
 
 [dependencies]
 
-serde = { version = "1.0", features = ["derive"] }
-phoenix = { git = "ssh://git@github.com/dusk-network/phoenix.git", branch = "disk" }
+serde = { version = "*", default-features = false }
+fermion = { version = "0.2", default-features = false }
+phoenix = { git = "ssh://git@github.com/dusk-network/phoenix.git", branch = "disk", optional = true }
+
+[features]
+default = ["std"]
+std = ["fermion/std", "phoenix"]
