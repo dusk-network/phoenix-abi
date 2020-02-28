@@ -12,6 +12,12 @@ pub const MAX_NOTES_PER_TRANSACTION: usize = 10;
 #[derive(Clone, Copy)]
 struct RistrettoPointBytes([u8; 64]);
 
+impl Default for RistrettoPointBytes {
+    fn default() -> Self {
+        RistrettoPointBytes([0u8; 64])
+    }
+}
+
 impl Serialize for RistrettoPointBytes {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -68,6 +74,12 @@ impl From<[u8; 64]> for RistrettoPointBytes {
 #[derive(Clone, Copy)]
 struct BlindingFactorBytes([u8; 48]);
 
+impl Default for BlindingFactorBytes {
+    fn default() -> Self {
+        BlindingFactorBytes([0u8; 48])
+    }
+}
+
 impl Serialize for BlindingFactorBytes {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -121,7 +133,7 @@ impl From<[u8; 48]> for BlindingFactorBytes {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
 pub struct Item {
     utxo: u8,
     commitment: [u8; 32],
@@ -171,7 +183,7 @@ mod convert {
             let utxo = match item.utxo {
                 1 => NoteUtxoType::Input,
                 2 => NoteUtxoType::Output,
-                _ => panic!("oh bother"), // NoteUtxoType::Unknown,
+                _ => NoteUtxoType::Output, // NoteUtxoType::Unknown,
             };
 
             let r_g = RistrettoPoint::from_uniform_bytes(&item.r_g.0);
