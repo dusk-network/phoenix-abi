@@ -1,15 +1,24 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 mod types;
-pub use types::{Item, ITEM_SIZE, MAX_NOTES_PER_TRANSACTION, PROOF_SIZE};
+pub use types::{
+    Note, Nullifier, MAX_NOTES_PER_TRANSACTION, MAX_NULLIFIERS_PER_TRANSACTION, NOTE_SIZE,
+    NULLIFIER_SIZE, PROOF_SIZE,
+};
 
 mod external {
     use super::*;
     extern "C" {
-        pub fn phoenix_store(items_buf: &[u8; MAX_NOTES_PER_TRANSACTION * ITEM_SIZE]) -> bool;
+        pub fn phoenix_store(
+            nullifiers_buf: &[u8; MAX_NULLIFIERS_PER_TRANSACTION * NULLIFIER_SIZE],
+            notes_buf: &[u8; MAX_NOTES_PER_TRANSACTION * NOTE_SIZE],
+        ) -> bool;
     }
 }
 
 // TODO: fix proof
-pub fn store(items: &[u8; MAX_NOTES_PER_TRANSACTION * ITEM_SIZE]) -> bool {
-    unsafe { external::phoenix_store(&items) }
+pub fn store(
+    nullifiers: &[u8; MAX_NULLIFIERS_PER_TRANSACTION * NULLIFIER_SIZE],
+    notes: &[u8; MAX_NOTES_PER_TRANSACTION * NOTE_SIZE],
+) -> bool {
+    unsafe { external::phoenix_store(&nullifiers, &notes) }
 }
