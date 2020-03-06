@@ -2,12 +2,17 @@
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-pub const ITEM_SIZE: usize = 305; // See `Item`
+const NOTE_SIZE: usize = 273; // See `Note`
+const NULLIFIER_SIZE: usize = 32;
 
 // TODO: this should come from `plonk_abi`
-pub const PROOF_SIZE: usize = 600;
+// pub const PROOF_SIZE: usize = 600;
 
-pub const MAX_NOTES_PER_TRANSACTION: usize = 10;
+const MAX_NOTES_PER_TRANSACTION: usize = 10;
+const MAX_NULLIFIERS_PER_TRANSACTION: usize = 8;
+
+pub type NullifiersBuffer = [u8; MAX_NULLIFIERS_PER_TRANSACTION * NULLIFIER_SIZE];
+pub type NotesBuffer = [u8; MAX_NOTES_PER_TRANSACTION * NOTE_SIZE];
 
 #[derive(Clone, Copy)]
 struct RistrettoPointBytes([u8; 64]);
@@ -134,7 +139,7 @@ impl From<[u8; 48]> for BlindingFactorBytes {
 }
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize)]
-pub struct Item {
+pub struct Note {
     utxo: u8,
     commitment: [u8; 32],
     nonce: [u8; 24],
@@ -144,47 +149,39 @@ pub struct Item {
     value: u64,
     encrypted_value: [u8; 24],
     encrypted_blinding_factor: BlindingFactorBytes,
-    nullifier: [u8; 32],
 }
 
-impl core::fmt::Debug for Item {
+impl core::fmt::Debug for Note {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "a")
     }
 }
 
+#[derive(Clone, Copy, Default, Serialize, Deserialize, Debug)]
+pub struct Nullifier([u8; NULLIFIER_SIZE]);
+
 #[cfg(feature = "std")]
 mod convert {
-    use super::Item;
+    use super::Note;
+    use super::Nullifier as ABINullifier;
 
     use phoenix::{
         CompressedRistretto, Nonce, NoteUtxoType, NoteVariant, Nullifier, ObfuscatedNote,
         RistrettoPoint, Scalar, TransactionItem, TransparentNote,
     };
 
-    impl From<Item> for TransactionItem {
-        fn from(item: Item) -> TransactionItem {
+    impl From<Note> for TransactionItem {
+        fn from(item: Note) -> TransactionItem {
             let mut tx_item = TransactionItem::default();
             tx_item.set_note(item.into());
-
-            if tx_item.utxo() == NoteUtxoType::Input {
-                let nullifier =
-                    Nullifier::new(Scalar::from_canonical_bytes(item.nullifier).unwrap());
-                tx_item.set_nullifier(nullifier);
-            }
             tx_item
         }
     }
 
-    impl From<Item> for NoteVariant {
-        fn from(item: Item) -> Self {
-            // We assume that the `utxo` field is encoded as either a 1
-            // or a 2
-            let utxo = match item.utxo {
-                1 => NoteUtxoType::Input,
-                2 => NoteUtxoType::Output,
-                _ => NoteUtxoType::Output, // NoteUtxoType::Unknown,
-            };
+    impl From<Note> for NoteVariant {
+        fn from(item: Note) -> Self {
+            // Should always be an output note
+            let utxo = NoteUtxoType::Output;
 
             let r_g = RistrettoPoint::from_uniform_bytes(&item.r_g.0);
             let pk_r = RistrettoPoint::from_uniform_bytes(&item.pk_r.0);
@@ -218,13 +215,10 @@ mod convert {
             }
         }
     }
-}
 
-// pub struct EncodedNote([u8; ITEM_SIZE]);
-//
-// // TODO: impl serde
-// impl EncodedNote {
-//     pub fn as_array(&self) -> [u8; ITEM_SIZE] {
-//         self.0
-//     }
-// }
+    impl From<ABINullifier> for Nullifier {
+        fn from(abi_nullifier: ABINullifier) -> Self {
+            Nullifier::new(Scalar::from_canonical_bytes(abi_nullifier.0).unwrap())
+        }
+    }
+}
