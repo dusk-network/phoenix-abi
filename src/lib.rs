@@ -9,8 +9,8 @@ mod external {
     use super::*;
     extern "C" {
         pub fn phoenix_store(
-            nullifiers_buf: &[u8; MAX_NULLIFIERS_PER_TRANSACTION * NULLIFIER_SIZE],
-            notes_buf: &[u8; MAX_NOTES_PER_TRANSACTION * NOTE_SIZE],
+            nullifiers: &[u8; MAX_NULLIFIERS_PER_TRANSACTION * NULLIFIER_SIZE],
+            notes: &[u8; MAX_NOTES_PER_TRANSACTION * NOTE_SIZE],
         ) -> bool;
     }
 }
