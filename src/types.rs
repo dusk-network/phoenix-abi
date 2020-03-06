@@ -2,14 +2,14 @@
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-pub const NOTE_SIZE: usize = 273; // See `Note`
-pub const NULLIFIER_SIZE: usize = 32;
+const NOTE_SIZE: usize = 273; // See `Note`
+const NULLIFIER_SIZE: usize = 32;
 
 // TODO: this should come from `plonk_abi`
-pub const PROOF_SIZE: usize = 600;
+// pub const PROOF_SIZE: usize = 600;
 
-pub const MAX_NOTES_PER_TRANSACTION: usize = 10;
-pub const MAX_NULLIFIERS_PER_TRANSACTION: usize = 8;
+const MAX_NOTES_PER_TRANSACTION: usize = 10;
+const MAX_NULLIFIERS_PER_TRANSACTION: usize = 8;
 
 pub type NullifiersBuffer = [u8; MAX_NULLIFIERS_PER_TRANSACTION * NULLIFIER_SIZE];
 pub type NotesBuffer = [u8; MAX_NOTES_PER_TRANSACTION * NOTE_SIZE];
