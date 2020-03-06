@@ -178,10 +178,7 @@ mod convert {
     impl From<Note> for NoteVariant {
         fn from(item: Note) -> Self {
             // Should always be an output note
-            let utxo = match item.utxo {
-                1 => NoteUtxoType::Output,
-                _ => NoteUtxoType::Output, // NoteUtxoType::Unknown,
-            };
+            let utxo = NoteUtxoType::Output;
 
             let r_g = RistrettoPoint::from_uniform_bytes(&item.r_g.0);
             let pk_r = RistrettoPoint::from_uniform_bytes(&item.pk_r.0);
