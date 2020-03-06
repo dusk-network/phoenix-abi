@@ -11,6 +11,9 @@ pub const PROOF_SIZE: usize = 600;
 pub const MAX_NOTES_PER_TRANSACTION: usize = 10;
 pub const MAX_NULLIFIERS_PER_TRANSACTION: usize = 8;
 
+pub type NullifiersBuffer = [u8; MAX_NULLIFIERS_PER_TRANSACTION * NULLIFIER_SIZE];
+pub type NotesBuffer = [u8; MAX_NOTES_PER_TRANSACTION * NOTE_SIZE];
+
 #[derive(Clone, Copy)]
 struct RistrettoPointBytes([u8; 64]);
 
