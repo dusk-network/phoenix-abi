@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-mod types;
+pub mod types;
 pub use types::{Note, NotesBuffer, Nullifier, NullifiersBuffer};
 
 mod external {
