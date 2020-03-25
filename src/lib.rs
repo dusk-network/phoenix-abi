@@ -1,21 +1,39 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 pub mod types;
-pub use types::{Note, NotesBuffer, Nullifier, NullifiersBuffer};
+
+pub use types::{Note, Nullifier};
 
 mod external {
-    use super::*;
     extern "C" {
-        pub fn phoenix_store(nullifiers: &NullifiersBuffer, notes: &NotesBuffer) -> bool;
+        pub fn phoenix_store(nullifiers: *const u8, notes: *const u8) -> bool;
 
-        pub fn phoenix_verify(nullifiers: &NullifiersBuffer, notes: &NotesBuffer) -> bool;
+        pub fn phoenix_verify(nullifiers: *const u8, notes: *const u8) -> bool;
     }
 }
 
 // TODO: fix proof
-pub fn store(nullifiers: &NullifiersBuffer, notes: &NotesBuffer) -> bool {
-    unsafe { external::phoenix_store(&nullifiers, &notes) }
+pub fn store(
+    nullifiers: &[Nullifier; Nullifier::MAX],
+    notes: &[Note; Note::MAX],
+) -> bool {
+    let nullifiers_buf =
+        Nullifier::encode(nullifiers).expect("buffer insufficient");
+    let notes_buf = Note::encode(notes).expect("buffer insufficient");
+
+    unsafe {
+        external::phoenix_store(nullifiers_buf.as_ptr(), notes_buf.as_ptr())
+    }
 }
 
-pub fn verify(nullifiers: &NullifiersBuffer, notes: &NotesBuffer) -> bool {
-    unsafe { external::phoenix_verify(&nullifiers, &notes) }
+pub fn verify(
+    nullifiers: &[Nullifier; Nullifier::MAX],
+    notes: &[Note; Note::MAX],
+) -> bool {
+    let nullifiers_buf =
+        Nullifier::encode(nullifiers).expect("buffer insufficient");
+    let notes_buf = Note::encode(notes).expect("buffer insufficient");
+
+    unsafe {
+        external::phoenix_verify(nullifiers_buf.as_ptr(), notes_buf.as_ptr())
+    }
 }

@@ -1,21 +1,12 @@
 // pub use plonk_abi::Proof;
+use fermion::{self, Error};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-pub const NOTE_SIZE: usize = 273; // See `Note`
-pub const NULLIFIER_SIZE: usize = 32;
-
 // TODO: this should come from `plonk_abi`
 // pub const PROOF_SIZE: usize = 600;
 
-pub const MAX_NOTES_PER_TRANSACTION: usize = 10;
-pub const MAX_NULLIFIERS_PER_TRANSACTION: usize = 8;
-
-pub type NullifiersBuffer = [u8; MAX_NULLIFIERS_PER_TRANSACTION * NULLIFIER_SIZE];
-pub type NotesBuffer = [u8; MAX_NOTES_PER_TRANSACTION * NOTE_SIZE];
-
 #[derive(Clone, Copy)]
-struct BlindingFactorBytes([u8; 48]);
+pub struct BlindingFactorBytes([u8; 48]);
 
 impl Default for BlindingFactorBytes {
     fn default() -> Self {
@@ -56,10 +47,10 @@ impl<'de> Deserialize<'de> for BlindingFactorBytes {
                 A: serde::de::SeqAccess<'de>,
             {
                 let mut bytes = [0u8; 48];
-                for i in 0..48 {
-                    bytes[i] = seq
+                for (i, byte) in bytes.iter_mut().enumerate() {
+                    *byte = seq
                         .next_element()?
-                        .ok_or(serde::de::Error::invalid_length(i, &"expected 48 bytes"))?;
+                        .ok_or_else(|| serde::de::Error::invalid_length(i, &"expected 48 bytes"))?;
                 }
 
                 Ok(BlindingFactorBytes(bytes))
@@ -89,6 +80,20 @@ pub struct Note {
     encrypted_blinding_factor: BlindingFactorBytes,
 }
 
+impl Note {
+    pub const MAX: usize = 10;
+    pub const SIZE: usize = 273;
+
+    // TODO: move this method as default implementation in a common trait for
+    // `Note` and `Nullifier` once the following issue is fixed:
+    // https://github.com/rust-lang/rust/issues/43408
+    pub fn encode<T: Serialize>(t: &T) -> Result<[u8; Self::MAX * Self::SIZE], Error> {
+        let mut buffer = [0u8; Self::MAX * Self::SIZE];
+        fermion::encode(t, &mut buffer)?;
+        Ok(buffer)
+    }
+}
+
 impl core::fmt::Debug for Note {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "a")
@@ -96,7 +101,21 @@ impl core::fmt::Debug for Note {
 }
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize, Debug)]
-pub struct Nullifier([u8; NULLIFIER_SIZE]);
+pub struct Nullifier([u8; Nullifier::SIZE]);
+
+impl Nullifier {
+    pub const MAX: usize = 8;
+    pub const SIZE: usize = 32;
+
+    // TODO: move this method as default implementation in a common trait for
+    // `Note` and `Nullifier` once the following issue is fixed:
+    // https://github.com/rust-lang/rust/issues/43408
+    pub fn encode<T: Serialize>(t: &T) -> Result<[u8; Self::MAX * Self::SIZE], Error> {
+        let mut buffer = [0u8; Self::MAX * Self::SIZE];
+        fermion::encode(t, &mut buffer)?;
+        Ok(buffer)
+    }
+}
 
 #[cfg(feature = "std")]
 mod convert {
