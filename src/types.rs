@@ -15,68 +15,6 @@ pub type NullifiersBuffer = [u8; MAX_NULLIFIERS_PER_TRANSACTION * NULLIFIER_SIZE
 pub type NotesBuffer = [u8; MAX_NOTES_PER_TRANSACTION * NOTE_SIZE];
 
 #[derive(Clone, Copy)]
-struct RistrettoPointBytes([u8; 64]);
-
-impl Default for RistrettoPointBytes {
-    fn default() -> Self {
-        RistrettoPointBytes([0u8; 64])
-    }
-}
-
-impl Serialize for RistrettoPointBytes {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeTuple;
-        let mut seq = serializer.serialize_tuple(self.0.len())?;
-        for byte in self.0.iter() {
-            seq.serialize_element(byte)?;
-        }
-        seq.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for RistrettoPointBytes {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct RistrettoPointBytesVisitor;
-
-        impl<'de> Visitor<'de> for RistrettoPointBytesVisitor {
-            type Value = RistrettoPointBytes;
-
-            fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                formatter.write_str("64 bytes")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<RistrettoPointBytes, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let mut bytes = [0u8; 64];
-                for i in 0..64 {
-                    bytes[i] = seq
-                        .next_element()?
-                        .ok_or(serde::de::Error::invalid_length(i, &"expected 64 bytes"))?;
-                }
-
-                Ok(RistrettoPointBytes(bytes))
-            }
-        }
-
-        deserializer.deserialize_tuple(64, RistrettoPointBytesVisitor)
-    }
-}
-
-impl From<[u8; 64]> for RistrettoPointBytes {
-    fn from(arr: [u8; 64]) -> Self {
-        RistrettoPointBytes(arr)
-    }
-}
-
-#[derive(Clone, Copy)]
 struct BlindingFactorBytes([u8; 48]);
 
 impl Default for BlindingFactorBytes {
@@ -143,8 +81,8 @@ pub struct Note {
     utxo: u8,
     commitment: [u8; 32],
     nonce: [u8; 24],
-    r_g: RistrettoPointBytes,
-    pk_r: RistrettoPointBytes,
+    r_g: [u8; 32],
+    pk_r: [u8; 32],
     idx: u64,
     value: u64,
     encrypted_value: [u8; 24],
@@ -162,12 +100,12 @@ pub struct Nullifier([u8; NULLIFIER_SIZE]);
 
 #[cfg(feature = "std")]
 mod convert {
-    use super::Note;
     use super::Nullifier as ABINullifier;
+    use super::{BlindingFactorBytes, Note};
 
     use phoenix::{
-        CompressedRistretto, Nonce, NoteUtxoType, NoteVariant, Nullifier, ObfuscatedNote,
-        RistrettoPoint, Scalar, TransactionItem, TransparentNote,
+        CompressedRistretto, Nonce, Note as NoteImpl, NoteUtxoType, NoteVariant, Nullifier,
+        ObfuscatedNote, Scalar, TransactionItem, TransparentNote,
     };
 
     impl From<Note> for TransactionItem {
@@ -183,8 +121,8 @@ mod convert {
             // Should always be an output note
             let utxo = NoteUtxoType::Output;
 
-            let r_g = RistrettoPoint::from_uniform_bytes(&item.r_g.0);
-            let pk_r = RistrettoPoint::from_uniform_bytes(&item.pk_r.0);
+            let r_g = CompressedRistretto::from_slice(&item.r_g);
+            let pk_r = CompressedRistretto::from_slice(&item.pk_r);
             let commitment = CompressedRistretto::from_slice(&item.commitment);
             let nonce = Nonce::from_slice(&item.nonce).unwrap();
 
@@ -193,8 +131,8 @@ mod convert {
                     utxo,
                     commitment,
                     nonce,
-                    r_g,
-                    pk_r,
+                    r_g.decompress().unwrap(),
+                    pk_r.decompress().unwrap(),
                     item.idx.into(),
                     item.encrypted_value,
                     item.encrypted_blinding_factor.0,
@@ -205,8 +143,8 @@ mod convert {
                     utxo,
                     item.value,
                     nonce,
-                    r_g,
-                    pk_r,
+                    r_g.decompress().unwrap(),
+                    pk_r.decompress().unwrap(),
                     item.idx.into(),
                     commitment,
                     item.encrypted_blinding_factor.0,
@@ -219,6 +157,45 @@ mod convert {
     impl From<ABINullifier> for Nullifier {
         fn from(abi_nullifier: ABINullifier) -> Self {
             Nullifier::new(Scalar::from_canonical_bytes(abi_nullifier.0).unwrap())
+        }
+    }
+
+    impl From<TransactionItem> for Note {
+        fn from(item: TransactionItem) -> Self {
+            match item.note() {
+                NoteVariant::Transparent(note) => Note {
+                    utxo: 1,
+                    commitment: note.commitment().to_bytes(),
+                    nonce: note.nonce().0,
+                    r_g: note.r_g().compress().to_bytes(),
+                    pk_r: note.pk_r().compress().to_bytes(),
+                    idx: note.idx().pos,
+                    value: note.value(None),
+                    encrypted_value: [0u8; 24],
+                    encrypted_blinding_factor: BlindingFactorBytes::from(
+                        *note.encrypted_blinding_factor(),
+                    ),
+                },
+                NoteVariant::Obfuscated(note) => Note {
+                    utxo: 1,
+                    commitment: note.commitment().to_bytes(),
+                    nonce: note.nonce().0,
+                    r_g: note.r_g().compress().to_bytes(),
+                    pk_r: note.pk_r().compress().to_bytes(),
+                    idx: note.idx().pos,
+                    value: 0,
+                    encrypted_value: *note.encrypted_value().unwrap(),
+                    encrypted_blinding_factor: BlindingFactorBytes::from(
+                        *note.encrypted_blinding_factor(),
+                    ),
+                },
+            }
+        }
+    }
+
+    impl From<Nullifier> for ABINullifier {
+        fn from(nullifier: Nullifier) -> Self {
+            ABINullifier(nullifier.point().to_bytes())
         }
     }
 }
