@@ -6,6 +6,81 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 // pub const PROOF_SIZE: usize = 600;
 
 #[derive(Clone, Copy)]
+pub struct PublicKey([u8; 64]);
+
+impl core::fmt::Debug for PublicKey {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        // TODO: implement
+        Ok(())
+    }
+}
+
+impl Default for PublicKey {
+    fn default() -> Self {
+        PublicKey([0u8; 64])
+    }
+}
+
+impl Serialize for PublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeTuple;
+        let mut seq = serializer.serialize_tuple(self.0.len())?;
+        for byte in self.0.iter() {
+            seq.serialize_element(byte)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for PublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct PublicKeyVisitor;
+
+        impl<'de> Visitor<'de> for PublicKeyVisitor {
+            type Value = PublicKey;
+
+            fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+                formatter.write_str("64 bytes")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<PublicKey, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut bytes = [0u8; 64];
+                for (i, byte) in bytes.iter_mut().enumerate() {
+                    *byte = seq
+                        .next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(i, &"expected 64 bytes"))?;
+                }
+
+                Ok(PublicKey(bytes))
+            }
+        }
+
+        deserializer.deserialize_tuple(64, PublicKeyVisitor)
+    }
+}
+
+impl From<[u8; 64]> for PublicKey {
+    fn from(arr: [u8; 64]) -> Self {
+        PublicKey(arr)
+    }
+}
+
+impl PublicKey {
+    pub fn as_bytes(&self) -> [u8; 64] {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct BlindingFactorBytes([u8; 48]);
 
 impl Default for BlindingFactorBytes {
