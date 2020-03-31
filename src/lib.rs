@@ -10,6 +10,11 @@ mod external {
         pub fn phoenix_verify(nullifiers: *const u8, notes: *const u8) -> bool;
 
         pub fn phoenix_credit(value: i32, pk: *const u8) -> bool;
+
+        pub fn phoenix_is_transparent(notes: *const u8) -> bool;
+
+        pub fn phoenix_is_addressed_to(notes: *const u8, pk: *const u8)
+            -> bool;
     }
 }
 
@@ -40,9 +45,19 @@ pub fn verify(
     }
 }
 
-pub fn credit(
-    value: u64,
-    pk: &PublicKey,
-) -> bool {
+pub fn credit(value: u64, pk: &PublicKey) -> bool {
     unsafe { external::phoenix_credit(value as i32, pk.as_bytes().as_ptr()) }
+}
+
+pub fn is_transparent(notes: &[Note; Note::MAX]) -> bool {
+    let notes_buf = Note::encode(notes).expect("buffer insufficient");
+    unsafe { external::phoenix_is_transparent(notes_buf.as_ptr()) }
+}
+
+pub fn is_addressed_to(notes: &[Note; Note::MAX], pk: PublicKey) -> bool {
+    let notes_buf = Note::encode(notes).expect("buffer insufficient");
+    let pk_buf = PublicKey::encode(pk).expect("buffer insufficient");
+    unsafe {
+        external::phoenix_is_addressed_to(notes_buf.as_ptr(), pk_buf.as_ptr());
+    }
 }
