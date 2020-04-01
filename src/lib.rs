@@ -56,8 +56,8 @@ pub fn is_transparent(notes: &[Note; Note::MAX]) -> bool {
 
 pub fn is_addressed_to(notes: &[Note; Note::MAX], pk: PublicKey) -> bool {
     let notes_buf = Note::encode(notes).expect("buffer insufficient");
-    let pk_buf = PublicKey::encode(pk).expect("buffer insufficient");
+    let pk_buf = PublicKey::encode(&pk).expect("buffer insufficient");
     unsafe {
-        external::phoenix_is_addressed_to(notes_buf.as_ptr(), pk_buf.as_ptr());
+        external::phoenix_is_addressed_to(notes_buf.as_ptr(), pk_buf.as_ptr())
     }
 }
