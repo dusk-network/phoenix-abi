@@ -45,7 +45,10 @@ impl<'de> Deserialize<'de> for PublicKey {
         impl<'de> Visitor<'de> for PublicKeyVisitor {
             type Value = PublicKey;
 
-            fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            fn expecting(
+                &self,
+                formatter: &mut ::core::fmt::Formatter,
+            ) -> ::core::fmt::Result {
                 formatter.write_str("64 bytes")
             }
 
@@ -55,9 +58,12 @@ impl<'de> Deserialize<'de> for PublicKey {
             {
                 let mut bytes = [0u8; 64];
                 for (i, byte) in bytes.iter_mut().enumerate() {
-                    *byte = seq
-                        .next_element()?
-                        .ok_or_else(|| serde::de::Error::invalid_length(i, &"expected 64 bytes"))?;
+                    *byte = seq.next_element()?.ok_or_else(|| {
+                        serde::de::Error::invalid_length(
+                            i,
+                            &"expected 64 bytes",
+                        )
+                    })?;
                 }
 
                 Ok(PublicKey(bytes))
@@ -77,6 +83,15 @@ impl From<[u8; 64]> for PublicKey {
 impl PublicKey {
     pub fn as_bytes(&self) -> [u8; 64] {
         self.0
+    }
+
+    // TODO: move this method as default implementation in a common trait for
+    // `Note` and `Nullifier` once the following issue is fixed:
+    // https://github.com/rust-lang/rust/issues/43408
+    pub fn encode<T: Serialize>(t: &T) -> Result<[u8; 64], Error> {
+        let mut buffer = [0u8; 64];
+        fermion::encode(t, &mut buffer)?;
+        Ok(buffer)
     }
 }
 
@@ -113,19 +128,28 @@ impl<'de> Deserialize<'de> for BlindingFactorBytes {
         impl<'de> Visitor<'de> for BlindingFactorBytesVisitor {
             type Value = BlindingFactorBytes;
 
-            fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            fn expecting(
+                &self,
+                formatter: &mut ::core::fmt::Formatter,
+            ) -> ::core::fmt::Result {
                 formatter.write_str("48 bytes")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<BlindingFactorBytes, A::Error>
+            fn visit_seq<A>(
+                self,
+                mut seq: A,
+            ) -> Result<BlindingFactorBytes, A::Error>
             where
                 A: serde::de::SeqAccess<'de>,
             {
                 let mut bytes = [0u8; 48];
                 for (i, byte) in bytes.iter_mut().enumerate() {
-                    *byte = seq
-                        .next_element()?
-                        .ok_or_else(|| serde::de::Error::invalid_length(i, &"expected 48 bytes"))?;
+                    *byte = seq.next_element()?.ok_or_else(|| {
+                        serde::de::Error::invalid_length(
+                            i,
+                            &"expected 48 bytes",
+                        )
+                    })?;
                 }
 
                 Ok(BlindingFactorBytes(bytes))
@@ -162,7 +186,9 @@ impl Note {
     // TODO: move this method as default implementation in a common trait for
     // `Note` and `Nullifier` once the following issue is fixed:
     // https://github.com/rust-lang/rust/issues/43408
-    pub fn encode<T: Serialize>(t: &T) -> Result<[u8; Self::MAX * Self::SIZE], Error> {
+    pub fn encode<T: Serialize>(
+        t: &T,
+    ) -> Result<[u8; Self::MAX * Self::SIZE], Error> {
         let mut buffer = [0u8; Self::MAX * Self::SIZE];
         fermion::encode(t, &mut buffer)?;
         Ok(buffer)
@@ -185,7 +211,9 @@ impl Nullifier {
     // TODO: move this method as default implementation in a common trait for
     // `Note` and `Nullifier` once the following issue is fixed:
     // https://github.com/rust-lang/rust/issues/43408
-    pub fn encode<T: Serialize>(t: &T) -> Result<[u8; Self::MAX * Self::SIZE], Error> {
+    pub fn encode<T: Serialize>(
+        t: &T,
+    ) -> Result<[u8; Self::MAX * Self::SIZE], Error> {
         let mut buffer = [0u8; Self::MAX * Self::SIZE];
         fermion::encode(t, &mut buffer)?;
         Ok(buffer)
@@ -198,8 +226,9 @@ mod convert {
     use super::{BlindingFactorBytes, Note};
 
     use phoenix::{
-        CompressedRistretto, Nonce, Note as NoteImpl, NoteUtxoType, NoteVariant, Nullifier,
-        ObfuscatedNote, Scalar, TransactionItem, TransparentNote,
+        CompressedRistretto, Nonce, Note as NoteImpl, NoteUtxoType,
+        NoteVariant, Nullifier, ObfuscatedNote, Scalar, TransactionItem,
+        TransparentNote,
     };
 
     impl From<Note> for TransactionItem {
@@ -250,7 +279,9 @@ mod convert {
 
     impl From<ABINullifier> for Nullifier {
         fn from(abi_nullifier: ABINullifier) -> Self {
-            Nullifier::new(Scalar::from_canonical_bytes(abi_nullifier.0).unwrap())
+            Nullifier::new(
+                Scalar::from_canonical_bytes(abi_nullifier.0).unwrap(),
+            )
         }
     }
 
