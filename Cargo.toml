@@ -10,7 +10,7 @@ edition = "2018"
 
 serde = { version = "*", default-features = false }
 fermion = { version = "0.2", default-features = false }
-phoenix = { path = "ssh://git@github.com/dusk-network/phoenix.git", branch = "fix-proto", optional = true }
+phoenix = { git = "ssh://git@github.com/dusk-network/phoenix.git", branch = "demo", optional = true }
 
 [features]
 default = ["std"]
