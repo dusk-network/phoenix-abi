@@ -229,12 +229,13 @@ impl Nullifier {
 #[cfg(feature = "std")]
 mod convert {
     use super::Nullifier as ABINullifier;
+    use super::PublicKey as ABIPublicKey;
     use super::{BlindingFactorBytes, Note};
 
     use phoenix::{
         CompressedRistretto, Nonce, Note as NoteImpl, NoteUtxoType,
-        NoteVariant, Nullifier, ObfuscatedNote, Scalar, TransactionItem,
-        TransparentNote,
+        NoteVariant, Nullifier, ObfuscatedNote, PublicKey, Scalar,
+        TransactionItem, TransparentNote,
     };
 
     impl From<Note> for TransactionItem {
@@ -327,6 +328,15 @@ mod convert {
     impl From<Nullifier> for ABINullifier {
         fn from(nullifier: Nullifier) -> Self {
             ABINullifier(nullifier.point().to_bytes())
+        }
+    }
+
+    impl From<PublicKey> for ABIPublicKey {
+        fn from(pk: PublicKey) -> Self {
+            let mut abi_buf = [0u8; 64];
+            abi_buf[0..32].copy_from_slice(&pk.a_g.compress().to_bytes());
+            abi_buf[32..64].copy_from_slice(&pk.b_g.compress().to_bytes());
+            ABIPublicKey(abi_buf)
         }
     }
 }
