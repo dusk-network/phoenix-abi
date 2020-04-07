@@ -3,7 +3,91 @@ use fermion::{self, Error};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 // TODO: this should come from `plonk_abi`
-// pub const PROOF_SIZE: usize = 600;
+
+#[derive(Clone, Copy)]
+pub struct Proof([u8; Proof::SIZE]);
+
+impl Default for Proof {
+    fn default() -> Self {
+        Proof([0u8; Proof::SIZE])
+    }
+}
+
+impl AsRef<[u8]> for Proof {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl Serialize for Proof {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeTuple;
+        let mut seq = serializer.serialize_tuple(self.0.len())?;
+        for byte in self.0.iter() {
+            seq.serialize_element(byte)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Proof {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ProofVisitor;
+
+        impl<'de> Visitor<'de> for ProofVisitor {
+            type Value = Proof;
+
+            fn expecting(
+                &self,
+                formatter: &mut ::core::fmt::Formatter,
+            ) -> ::core::fmt::Result {
+                formatter.write_str("1097 bytes")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Proof, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut bytes = [0u8; 1097];
+                for (i, byte) in bytes.iter_mut().enumerate() {
+                    *byte = seq.next_element()?.ok_or_else(|| {
+                        serde::de::Error::invalid_length(
+                            i,
+                            &"expected 1097 bytes",
+                        )
+                    })?;
+                }
+
+                Ok(Proof(bytes))
+            }
+        }
+
+        deserializer.deserialize_tuple(1097, ProofVisitor)
+    }
+}
+
+impl core::fmt::Debug for Proof {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        // TODO: implement
+        Ok(())
+    }
+}
+
+impl Proof {
+    pub const SIZE: usize = 1097;
+
+    pub fn encode<T: Serialize>(t: &T) -> Result<[u8; Proof::SIZE], Error> {
+        let mut buffer = [0u8; Proof::SIZE];
+        fermion::encode(t, &mut buffer)?;
+        Ok(buffer)
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct PublicKey([u8; 64]);
