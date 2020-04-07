@@ -174,10 +174,9 @@ impl From<[u8; 48]> for BlindingFactorBytes {
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize)]
 pub struct Note {
-    utxo: u8,
-    commitment: [u8; 32],
+    value_commitment: [u8; 32],
     nonce: [u8; 24],
-    r_g: [u8; 32],
+    r: [u8; 32],
     pk_r: [u8; 32],
     idx: u64,
     value: u64,
@@ -233,51 +232,52 @@ mod convert {
     use super::{BlindingFactorBytes, Note};
 
     use phoenix::{
-        CompressedRistretto, Nonce, Note as NoteImpl, NoteUtxoType,
-        NoteVariant, Nullifier, ObfuscatedNote, PublicKey, Scalar,
-        TransactionItem, TransparentNote,
+        utils, BlsScalar, Nonce, Note as NoteImpl, NoteVariant, Nullifier,
+        ObfuscatedNote, PublicKey, TransactionOutput, TransparentNote,
     };
 
-    impl From<Note> for TransactionItem {
-        fn from(item: Note) -> TransactionItem {
-            let mut tx_item = TransactionItem::default();
-            tx_item.set_note(item.into());
-            tx_item
+    impl From<Note> for TransactionOutput {
+        fn from(item: Note) -> TransactionOutput {
+            TransactionOutput::new(
+                item.into(),
+                0,
+                BlsScalar::default(),
+                PublicKey::default(),
+            )
         }
     }
 
     impl From<Note> for NoteVariant {
         fn from(item: Note) -> Self {
-            // Should always be an output note
-            let utxo = NoteUtxoType::Output;
-
-            let r_g = CompressedRistretto::from_slice(&item.r_g);
-            let pk_r = CompressedRistretto::from_slice(&item.pk_r);
-            let commitment = CompressedRistretto::from_slice(&item.commitment);
+            let pk_r =
+                utils::deserialize_compressed_jubjub(&item.pk_r).unwrap();
+            let commitment =
+                utils::deserialize_bls_scalar(&item.value_commitment).unwrap();
             let nonce = Nonce::from_slice(&item.nonce).unwrap();
 
             if item.value == 0 {
                 ObfuscatedNote::new(
-                    utxo,
                     commitment,
                     nonce,
-                    r_g.decompress().unwrap(),
-                    pk_r.decompress().unwrap(),
-                    item.idx.into(),
+                    utils::deserialize_compressed_jubjub(&item.r).unwrap(),
+                    pk_r,
+                    item.idx,
                     item.encrypted_value,
                     item.encrypted_blinding_factor.0,
                 )
                 .into()
             } else {
                 TransparentNote::new(
-                    utxo,
-                    item.value,
-                    nonce,
-                    r_g.decompress().unwrap(),
-                    pk_r.decompress().unwrap(),
-                    item.idx.into(),
                     commitment,
-                    item.encrypted_blinding_factor.0,
+                    nonce,
+                    utils::deserialize_compressed_jubjub(&item.r).unwrap(),
+                    pk_r,
+                    item.idx,
+                    item.value,
+                    utils::deserialize_bls_scalar(
+                        &item.encrypted_blinding_factor.0,
+                    )
+                    .unwrap(),
                 )
                 .into()
             }
@@ -286,22 +286,35 @@ mod convert {
 
     impl From<ABINullifier> for Nullifier {
         fn from(abi_nullifier: ABINullifier) -> Self {
-            Nullifier::new(
-                Scalar::from_canonical_bytes(abi_nullifier.0).unwrap(),
+            Nullifier::from(
+                utils::deserialize_bls_scalar(&abi_nullifier.0).unwrap(),
             )
         }
     }
 
-    impl From<TransactionItem> for Note {
-        fn from(item: TransactionItem) -> Self {
-            match item.note() {
+    impl From<TransactionOutput> for Note {
+        fn from(item: TransactionOutput) -> Self {
+            let mut r_buf = [0u8; 32];
+            utils::serialize_compressed_jubjub(&item.note.R(), &mut r_buf)
+                .unwrap();
+            let mut commitment_buf = [0u8; 32];
+            utils::serialize_bls_scalar(
+                item.note.value_commitment(),
+                &mut commitment_buf,
+            )
+            .unwrap();
+
+            let mut pk_buf = [0u8; 32];
+            utils::serialize_compressed_jubjub(&item.note.pk_r(), &mut pk_buf)
+                .unwrap();
+
+            match item.note {
                 NoteVariant::Transparent(note) => Note {
-                    utxo: 1,
-                    commitment: note.commitment().to_bytes(),
+                    value_commitment: commitment_buf,
                     nonce: note.nonce().0,
-                    r_g: note.r_g().compress().to_bytes(),
-                    pk_r: note.pk_r().compress().to_bytes(),
-                    idx: note.idx().pos,
+                    r: r_buf,
+                    pk_r: pk_buf,
+                    idx: note.idx(),
                     value: note.value(None),
                     encrypted_value: [0u8; 24],
                     encrypted_blinding_factor: BlindingFactorBytes::from(
@@ -309,12 +322,11 @@ mod convert {
                     ),
                 },
                 NoteVariant::Obfuscated(note) => Note {
-                    utxo: 1,
-                    commitment: note.commitment().to_bytes(),
+                    value_commitment: commitment_buf,
                     nonce: note.nonce().0,
-                    r_g: note.r_g().compress().to_bytes(),
-                    pk_r: note.pk_r().compress().to_bytes(),
-                    idx: note.idx().pos,
+                    r: r_buf,
+                    pk_r: pk_buf,
+                    idx: note.idx(),
                     value: 0,
                     encrypted_value: *note.encrypted_value().unwrap(),
                     encrypted_blinding_factor: BlindingFactorBytes::from(
@@ -327,15 +339,19 @@ mod convert {
 
     impl From<Nullifier> for ABINullifier {
         fn from(nullifier: Nullifier) -> Self {
-            ABINullifier(nullifier.point().to_bytes())
+            ABINullifier(nullifier.to_bytes().unwrap())
         }
     }
 
     impl From<PublicKey> for ABIPublicKey {
         fn from(pk: PublicKey) -> Self {
             let mut abi_buf = [0u8; 64];
-            abi_buf[0..32].copy_from_slice(&pk.a_g.compress().to_bytes());
-            abi_buf[32..64].copy_from_slice(&pk.b_g.compress().to_bytes());
+            let mut a_buf = [0u8; 32];
+            utils::serialize_compressed_jubjub(&pk.A, &mut a_buf).unwrap();
+            abi_buf[0..32].copy_from_slice(&a_buf);
+            let mut b_buf = [0u8; 32];
+            utils::serialize_compressed_jubjub(&pk.B, &mut b_buf).unwrap();
+            abi_buf[32..64].copy_from_slice(&b_buf);
             ABIPublicKey(abi_buf)
         }
     }
