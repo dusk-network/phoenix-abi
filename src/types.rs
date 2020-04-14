@@ -1,9 +1,8 @@
-// pub use plonk_abi::Proof;
 use fermion::{self, Error};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-// TODO: this should come from `plonk_abi`
 
+// TODO: this should come from `plonk_abi`
 #[derive(Clone, Copy)]
 pub struct Proof(pub [u8; Proof::SIZE]);
 
@@ -54,7 +53,7 @@ impl<'de> Deserialize<'de> for Proof {
             where
                 A: serde::de::SeqAccess<'de>,
             {
-                let mut bytes = [0u8; 1097];
+                let mut bytes = [0u8; Proof::SIZE];
                 for (i, byte) in bytes.iter_mut().enumerate() {
                     *byte = seq.next_element()?.ok_or_else(|| {
                         serde::de::Error::invalid_length(
@@ -68,7 +67,7 @@ impl<'de> Deserialize<'de> for Proof {
             }
         }
 
-        deserializer.deserialize_tuple(1097, ProofVisitor)
+        deserializer.deserialize_tuple(Proof::SIZE, ProofVisitor)
     }
 }
 
@@ -80,7 +79,8 @@ impl core::fmt::Debug for Proof {
 }
 
 impl Proof {
-    pub const SIZE: usize = 1097;
+    // Proof + public inputs
+    pub const SIZE: usize = 1097 + 224;
 
     pub fn encode<T: Serialize>(t: &T) -> Result<[u8; Proof::SIZE], Error> {
         let mut buffer = [0u8; Proof::SIZE];
@@ -270,8 +270,8 @@ pub struct Note {
 }
 
 impl Note {
-    pub const MAX: usize = 10;
-    pub const SIZE: usize = 273;
+    pub const MAX: usize = 2;
+    pub const SIZE: usize = 240;
 
     // TODO: move this method as default implementation in a common trait for
     // `Note` and `Nullifier` once the following issue is fixed:
@@ -295,7 +295,7 @@ impl core::fmt::Debug for Note {
 pub struct Nullifier([u8; Nullifier::SIZE]);
 
 impl Nullifier {
-    pub const MAX: usize = 8;
+    pub const MAX: usize = 1;
     pub const SIZE: usize = 32;
 
     // TODO: move this method as default implementation in a common trait for
@@ -452,6 +452,30 @@ mod convert {
             }
 
             Ok(abi_note)
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+        use phoenix::{NoteGenerator, SecretKey};
+
+        #[test]
+        fn convert_output_to_note() {
+            // Mandatory Phoenix init stuff
+            utils::init();
+
+            // First, let's make an actual phoenix tx output, and convert that to
+            // and RPC one.
+            let sk = SecretKey::default();
+            let pk = sk.public_key();
+            let value = 95;
+            let (note, blinding_factor) = TransparentNote::output(&pk, value);
+            let output = note.to_transaction_output(value, blinding_factor, pk);
+
+            let rpc_output: rpc::TransactionOutput = output.into();
+
+            let abi_output = Note::try_from(&rpc_output).unwrap();
         }
     }
 }
