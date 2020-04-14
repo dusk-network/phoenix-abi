@@ -269,7 +269,7 @@ pub struct Note {
 }
 
 impl Note {
-    pub const MAX: usize = 2;
+    pub const MAX: usize = 3;
     pub const SIZE: usize = 240;
 
     // TODO: move this method as default implementation in a common trait for
