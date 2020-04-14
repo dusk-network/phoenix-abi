@@ -466,7 +466,7 @@ mod convert {
             utils::init();
 
             // First, let's make an actual phoenix tx output, and convert that to
-            // and RPC one.
+            // an RPC one.
             let sk = SecretKey::default();
             let pk = sk.public_key();
             let value = 95;
