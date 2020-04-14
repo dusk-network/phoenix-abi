@@ -458,7 +458,7 @@ mod convert {
     #[cfg(test)]
     mod test {
         use super::*;
-        use phoenix::{NoteGenerator, SecretKey};
+        use phoenix::{crypto, NoteGenerator, SecretKey};
 
         #[test]
         fn convert_output_to_note() {
@@ -476,6 +476,24 @@ mod convert {
             let rpc_output: rpc::TransactionOutput = output.into();
 
             let abi_output = Note::try_from(&rpc_output).unwrap();
+        }
+
+        #[test]
+        fn convert_nullifier() {
+            // Mandatory Phoenix init stuff
+            utils::init();
+
+            // Create an actual nullifier first, and then cast to to an RPC one.
+            let sk = SecretKey::default();
+            let pk = sk.public_key();
+            let value = 100;
+            let note = TransparentNote::output(&pk, value).0;
+            let merkle_opening = crypto::MerkleProof::mock(note.hash());
+            let input = note.to_transaction_input(merkle_opening, sk);
+
+            let rpc_nullifier: rpc::Nullifier = input.nullifier.into();
+
+            let abi_nullifier = ABINullifier::try_from(&rpc_nullifier).unwrap();
         }
     }
 }
