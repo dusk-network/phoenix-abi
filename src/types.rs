@@ -79,8 +79,7 @@ impl core::fmt::Debug for Proof {
 }
 
 impl Proof {
-    // Proof + public inputs
-    pub const SIZE: usize = 1097 + 224;
+    pub const SIZE: usize = 1097;
 
     pub fn encode<T: Serialize>(t: &T) -> Result<[u8; Proof::SIZE], Error> {
         let mut buffer = [0u8; Proof::SIZE];
@@ -292,11 +291,14 @@ impl core::fmt::Debug for Note {
 }
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize, Debug)]
-pub struct Nullifier([u8; Nullifier::SIZE]);
+pub struct Input {
+    nullifier: [u8; 32],
+    merkle_root: [u8; 32],
+}
 
-impl Nullifier {
+impl Input {
     pub const MAX: usize = 1;
-    pub const SIZE: usize = 32;
+    pub const SIZE: usize = 64;
 
     // TODO: move this method as default implementation in a common trait for
     // `Note` and `Nullifier` once the following issue is fixed:
@@ -312,15 +314,15 @@ impl Nullifier {
 
 #[cfg(feature = "std")]
 mod convert {
-    use super::Nullifier as ABINullifier;
+    use super::Input as ABIInput;
     use super::PublicKey as ABIPublicKey;
     use super::{BlindingFactorBytes, Note};
     use std::convert::TryFrom;
 
     use phoenix::{
         rpc, utils, BlsScalar, Error, Nonce, Note as NoteImpl, NoteVariant,
-        Nullifier, ObfuscatedNote, PublicKey, TransactionOutput,
-        TransparentNote,
+        Nullifier, ObfuscatedNote, PublicKey, TransactionInput,
+        TransactionOutput, TransparentNote,
     };
 
     impl From<Note> for TransactionOutput {
@@ -369,22 +371,38 @@ mod convert {
         }
     }
 
-    impl From<ABINullifier> for Nullifier {
-        fn from(abi_nullifier: ABINullifier) -> Self {
-            Nullifier::from(
-                utils::deserialize_bls_scalar(&abi_nullifier.0).unwrap(),
-            )
+    impl From<ABIInput> for TransactionInput {
+        fn from(abi_input: ABIInput) -> Self {
+            let mut input = TransactionInput::default();
+            input.nullifier = Nullifier::from(
+                utils::deserialize_bls_scalar(&abi_input.nullifier).unwrap(),
+            );
+            input.merkle_root =
+                utils::deserialize_bls_scalar(&abi_input.merkle_root).unwrap();
+            input
         }
     }
 
-    impl TryFrom<&rpc::Nullifier> for ABINullifier {
+    impl TryFrom<&rpc::TransactionInput> for ABIInput {
         type Error = Error;
 
-        fn try_from(nullifier: &rpc::Nullifier) -> Result<Self, Error> {
-            let mut scalar_buf = [0u8; 32];
-            let h = nullifier.h.as_ref().ok_or_else(|| Error::Generic)?;
-            scalar_buf.copy_from_slice(&h.data);
-            Ok(ABINullifier(scalar_buf))
+        fn try_from(input: &rpc::TransactionInput) -> Result<Self, Error> {
+            let mut nullifier_buf = [0u8; 32];
+            let h = input
+                .nullifier
+                .as_ref()
+                .ok_or(Error::Generic)?
+                .h
+                .as_ref()
+                .ok_or_else(|| Error::Generic)?;
+            nullifier_buf.copy_from_slice(&h.data);
+            let mut merkle_root_buf = [0u8; 32];
+            let h = input.merkle_root.as_ref().ok_or(Error::Generic)?;
+            merkle_root_buf.copy_from_slice(&h.data);
+            Ok(ABIInput {
+                nullifier: nullifier_buf,
+                merkle_root: merkle_root_buf,
+            })
         }
     }
 
@@ -479,11 +497,11 @@ mod convert {
         }
 
         #[test]
-        fn convert_nullifier() {
+        fn convert_input() {
             // Mandatory Phoenix init stuff
             utils::init();
 
-            // Create an actual nullifier first, and then cast to to an RPC one.
+            // Create an actual input first, and then cast it to an RPC one.
             let sk = SecretKey::default();
             let pk = sk.public_key();
             let value = 100;
@@ -491,9 +509,9 @@ mod convert {
             let merkle_opening = crypto::MerkleProof::mock(note.hash());
             let input = note.to_transaction_input(merkle_opening, sk);
 
-            let rpc_nullifier: rpc::Nullifier = input.nullifier.into();
+            let rpc_input: rpc::TransactionInput = input.into();
 
-            let abi_nullifier = ABINullifier::try_from(&rpc_nullifier).unwrap();
+            let abi_input = ABIInput::try_from(&rpc_input).unwrap();
         }
     }
 }
