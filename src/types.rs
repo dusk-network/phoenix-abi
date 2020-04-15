@@ -487,7 +487,7 @@ mod convert {
     #[cfg(test)]
     mod test {
         use super::*;
-        use phoenix::{crypto, NoteGenerator, SecretKey};
+        use phoenix::{crypto, Note as NoteImpl, NoteGenerator, SecretKey};
 
         #[test]
         fn convert_output_to_note() {
