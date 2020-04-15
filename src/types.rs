@@ -4,7 +4,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 // TODO: this should come from `plonk_abi`
 #[derive(Clone, Copy)]
-pub struct Proof(pub [u8; Proof::SIZE]);
+pub struct Proof([u8; Proof::SIZE]);
 
 impl Default for Proof {
     fn default() -> Self {
@@ -85,6 +85,14 @@ impl Proof {
         let mut buffer = [0u8; Proof::SIZE];
         fermion::encode(t, &mut buffer)?;
         Ok(buffer)
+    }
+
+    pub fn from_bytes(bytes: [u8; Proof::SIZE]) -> Self {
+        Proof(bytes)
+    }
+
+    pub fn to_bytes(&self) -> [u8; Proof::SIZE] {
+        self.0
     }
 }
 
@@ -315,14 +323,13 @@ impl Input {
 #[cfg(feature = "std")]
 mod convert {
     use super::Input as ABIInput;
-    use super::PublicKey as ABIPublicKey;
     use super::{BlindingFactorBytes, Note};
     use std::convert::TryFrom;
 
     use phoenix::{
-        rpc, utils, BlsScalar, Error, Nonce, Note as NoteImpl, NoteVariant,
-        Nullifier, ObfuscatedNote, PublicKey, TransactionInput,
-        TransactionOutput, TransparentNote,
+        rpc, utils, BlsScalar, Error, Nonce, NoteVariant, Nullifier,
+        ObfuscatedNote, PublicKey, TransactionInput, TransactionOutput,
+        TransparentNote,
     };
 
     impl From<Note> for TransactionOutput {
