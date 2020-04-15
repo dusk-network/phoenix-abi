@@ -324,7 +324,7 @@ impl Input {
 mod convert {
     use super::Input as ABIInput;
     use super::{BlindingFactorBytes, Note};
-    use std::convert::TryFrom;
+    use std::convert::{TryFrom, TryInto};
 
     use phoenix::{
         rpc, utils, BlsScalar, Error, Nonce, NoteVariant, Nullifier,
@@ -332,61 +332,65 @@ mod convert {
         TransparentNote,
     };
 
-    impl From<Note> for TransactionOutput {
-        fn from(item: Note) -> TransactionOutput {
-            TransactionOutput::new(
-                item.into(),
+    impl TryFrom<Note> for TransactionOutput {
+        type Error = Error;
+
+        fn try_from(item: Note) -> Result<TransactionOutput, Error> {
+            Ok(TransactionOutput::new(
+                item.try_into()?,
                 0,
                 BlsScalar::default(),
                 PublicKey::default(),
-            )
+            ))
         }
     }
 
-    impl From<Note> for NoteVariant {
-        fn from(item: Note) -> Self {
-            let pk_r =
-                utils::deserialize_compressed_jubjub(&item.pk_r).unwrap();
+    impl TryFrom<Note> for NoteVariant {
+        type Error = Error;
+
+        fn try_from(item: Note) -> Result<Self, Error> {
+            let pk_r = utils::deserialize_compressed_jubjub(&item.pk_r)?;
             let commitment =
-                utils::deserialize_bls_scalar(&item.value_commitment).unwrap();
-            let nonce = Nonce::from_slice(&item.nonce).unwrap();
+                utils::deserialize_bls_scalar(&item.value_commitment)?;
+            let nonce = Nonce::from_slice(&item.nonce).ok_or(Error::Generic)?;
 
             if item.value == 0 {
-                ObfuscatedNote::new(
+                Ok(ObfuscatedNote::new(
                     commitment,
                     nonce,
-                    utils::deserialize_compressed_jubjub(&item.r).unwrap(),
+                    utils::deserialize_compressed_jubjub(&item.r)?,
                     pk_r,
                     item.idx,
                     item.encrypted_value,
                     item.encrypted_blinding_factor.0,
                 )
-                .into()
+                .into())
             } else {
-                TransparentNote::new(
+                Ok(TransparentNote::new(
                     commitment,
                     nonce,
-                    utils::deserialize_compressed_jubjub(&item.r).unwrap(),
+                    utils::deserialize_compressed_jubjub(&item.r)?,
                     pk_r,
                     item.idx,
                     item.value,
-                    utils::deserialize_bls_scalar(&item.blinding_factor)
-                        .unwrap(),
+                    utils::deserialize_bls_scalar(&item.blinding_factor)?,
                 )
-                .into()
+                .into())
             }
         }
     }
 
-    impl From<ABIInput> for TransactionInput {
-        fn from(abi_input: ABIInput) -> Self {
+    impl TryFrom<ABIInput> for TransactionInput {
+        type Error = Error;
+
+        fn try_from(abi_input: ABIInput) -> Result<Self, Error> {
             let mut input = TransactionInput::default();
-            input.nullifier = Nullifier::from(
-                utils::deserialize_bls_scalar(&abi_input.nullifier).unwrap(),
-            );
+            input.nullifier = Nullifier::from(utils::deserialize_bls_scalar(
+                &abi_input.nullifier,
+            )?);
             input.merkle_root =
-                utils::deserialize_bls_scalar(&abi_input.merkle_root).unwrap();
-            input
+                utils::deserialize_bls_scalar(&abi_input.merkle_root)?;
+            Ok(input)
         }
     }
 
