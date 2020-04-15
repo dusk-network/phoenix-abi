@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 pub mod types;
 
-pub use types::{Note, Nullifier, Proof, PublicKey};
+pub use types::{Input, Note, Proof, PublicKey};
 
 mod external {
     extern "C" {
@@ -23,18 +23,17 @@ mod external {
 
 // TODO: fix proof
 pub fn store(
-    nullifiers: &[Nullifier; Nullifier::MAX],
+    inputs: &[Input; Input::MAX],
     notes: &[Note; Note::MAX],
     proof: &Proof,
 ) -> bool {
-    let nullifiers_buf =
-        Nullifier::encode(nullifiers).expect("buffer insufficient");
+    let inputs_buf = Input::encode(inputs).expect("buffer insufficient");
     let notes_buf = Note::encode(notes).expect("buffer insufficient");
     let proof_buf = Proof::encode(proof).expect("buffer insufficient");
 
     unsafe {
         external::phoenix_store(
-            nullifiers_buf.as_ptr(),
+            inputs_buf.as_ptr(),
             notes_buf.as_ptr(),
             proof_buf.as_ptr(),
         )
@@ -42,18 +41,17 @@ pub fn store(
 }
 
 pub fn verify(
-    nullifiers: &[Nullifier; Nullifier::MAX],
+    inputs: &[Input; Input::MAX],
     notes: &[Note; Note::MAX],
     proof: &Proof,
 ) -> bool {
-    let nullifiers_buf =
-        Nullifier::encode(nullifiers).expect("buffer insufficient");
+    let inputs_buf = Input::encode(inputs).expect("buffer insufficient");
     let notes_buf = Note::encode(notes).expect("buffer insufficient");
     let proof_buf = Proof::encode(proof).expect("buffer insufficient");
 
     unsafe {
         external::phoenix_verify(
-            nullifiers_buf.as_ptr(),
+            inputs_buf.as_ptr(),
             notes_buf.as_ptr(),
             proof_buf.as_ptr(),
         )

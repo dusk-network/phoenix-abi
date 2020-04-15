@@ -1,9 +1,8 @@
-// pub use plonk_abi::Proof;
 use fermion::{self, Error};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-// TODO: this should come from `plonk_abi`
 
+// TODO: this should come from `plonk_abi`
 #[derive(Clone, Copy)]
 pub struct Proof([u8; Proof::SIZE]);
 
@@ -54,7 +53,7 @@ impl<'de> Deserialize<'de> for Proof {
             where
                 A: serde::de::SeqAccess<'de>,
             {
-                let mut bytes = [0u8; 1097];
+                let mut bytes = [0u8; Proof::SIZE];
                 for (i, byte) in bytes.iter_mut().enumerate() {
                     *byte = seq.next_element()?.ok_or_else(|| {
                         serde::de::Error::invalid_length(
@@ -68,7 +67,7 @@ impl<'de> Deserialize<'de> for Proof {
             }
         }
 
-        deserializer.deserialize_tuple(1097, ProofVisitor)
+        deserializer.deserialize_tuple(Proof::SIZE, ProofVisitor)
     }
 }
 
@@ -86,6 +85,14 @@ impl Proof {
         let mut buffer = [0u8; Proof::SIZE];
         fermion::encode(t, &mut buffer)?;
         Ok(buffer)
+    }
+
+    pub fn from_bytes(bytes: [u8; Proof::SIZE]) -> Self {
+        Proof(bytes)
+    }
+
+    pub fn to_bytes(&self) -> [u8; Proof::SIZE] {
+        self.0
     }
 }
 
@@ -265,12 +272,13 @@ pub struct Note {
     idx: u64,
     value: u64,
     encrypted_value: [u8; 24],
+    blinding_factor: [u8; 32],
     encrypted_blinding_factor: BlindingFactorBytes,
 }
 
 impl Note {
-    pub const MAX: usize = 10;
-    pub const SIZE: usize = 273;
+    pub const MAX: usize = 3;
+    pub const SIZE: usize = 240;
 
     // TODO: move this method as default implementation in a common trait for
     // `Note` and `Nullifier` once the following issue is fixed:
@@ -291,11 +299,14 @@ impl core::fmt::Debug for Note {
 }
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize, Debug)]
-pub struct Nullifier([u8; Nullifier::SIZE]);
+pub struct Input {
+    nullifier: [u8; 32],
+    merkle_root: [u8; 32],
+}
 
-impl Nullifier {
-    pub const MAX: usize = 8;
-    pub const SIZE: usize = 32;
+impl Input {
+    pub const MAX: usize = 1;
+    pub const SIZE: usize = 64;
 
     // TODO: move this method as default implementation in a common trait for
     // `Note` and `Nullifier` once the following issue is fixed:
@@ -311,132 +322,207 @@ impl Nullifier {
 
 #[cfg(feature = "std")]
 mod convert {
-    use super::Nullifier as ABINullifier;
-    use super::PublicKey as ABIPublicKey;
+    use super::Input as ABIInput;
     use super::{BlindingFactorBytes, Note};
+    use std::convert::{TryFrom, TryInto};
 
     use phoenix::{
-        utils, BlsScalar, Nonce, Note as NoteImpl, NoteVariant, Nullifier,
-        ObfuscatedNote, PublicKey, TransactionOutput, TransparentNote,
+        rpc, utils, BlsScalar, Error, Nonce, NoteVariant, Nullifier,
+        ObfuscatedNote, PublicKey, TransactionInput, TransactionOutput,
+        TransparentNote,
     };
 
-    impl From<Note> for TransactionOutput {
-        fn from(item: Note) -> TransactionOutput {
-            TransactionOutput::new(
-                item.into(),
+    impl TryFrom<Note> for TransactionOutput {
+        type Error = Error;
+
+        fn try_from(item: Note) -> Result<TransactionOutput, Error> {
+            Ok(TransactionOutput::new(
+                item.try_into()?,
                 0,
                 BlsScalar::default(),
                 PublicKey::default(),
-            )
+            ))
         }
     }
 
-    impl From<Note> for NoteVariant {
-        fn from(item: Note) -> Self {
-            let pk_r =
-                utils::deserialize_compressed_jubjub(&item.pk_r).unwrap();
+    impl TryFrom<Note> for NoteVariant {
+        type Error = Error;
+
+        fn try_from(item: Note) -> Result<Self, Error> {
+            let pk_r = utils::deserialize_compressed_jubjub(&item.pk_r)?;
             let commitment =
-                utils::deserialize_bls_scalar(&item.value_commitment).unwrap();
-            let nonce = Nonce::from_slice(&item.nonce).unwrap();
+                utils::deserialize_bls_scalar(&item.value_commitment)?;
+            let nonce = Nonce::from_slice(&item.nonce).ok_or(Error::Generic)?;
 
             if item.value == 0 {
-                ObfuscatedNote::new(
+                Ok(ObfuscatedNote::new(
                     commitment,
                     nonce,
-                    utils::deserialize_compressed_jubjub(&item.r).unwrap(),
+                    utils::deserialize_compressed_jubjub(&item.r)?,
                     pk_r,
                     item.idx,
                     item.encrypted_value,
                     item.encrypted_blinding_factor.0,
                 )
-                .into()
+                .into())
             } else {
-                TransparentNote::new(
+                Ok(TransparentNote::new(
                     commitment,
                     nonce,
-                    utils::deserialize_compressed_jubjub(&item.r).unwrap(),
+                    utils::deserialize_compressed_jubjub(&item.r)?,
                     pk_r,
                     item.idx,
                     item.value,
-                    utils::deserialize_bls_scalar(
-                        &item.encrypted_blinding_factor.0,
-                    )
-                    .unwrap(),
+                    utils::deserialize_bls_scalar(&item.blinding_factor)?,
                 )
-                .into()
+                .into())
             }
         }
     }
 
-    impl From<ABINullifier> for Nullifier {
-        fn from(abi_nullifier: ABINullifier) -> Self {
-            Nullifier::from(
-                utils::deserialize_bls_scalar(&abi_nullifier.0).unwrap(),
-            )
+    impl TryFrom<ABIInput> for TransactionInput {
+        type Error = Error;
+
+        fn try_from(abi_input: ABIInput) -> Result<Self, Error> {
+            let mut input = TransactionInput::default();
+            input.nullifier = Nullifier::from(utils::deserialize_bls_scalar(
+                &abi_input.nullifier,
+            )?);
+            input.merkle_root =
+                utils::deserialize_bls_scalar(&abi_input.merkle_root)?;
+            Ok(input)
         }
     }
 
-    impl From<TransactionOutput> for Note {
-        fn from(item: TransactionOutput) -> Self {
+    impl TryFrom<&rpc::TransactionInput> for ABIInput {
+        type Error = Error;
+
+        fn try_from(input: &rpc::TransactionInput) -> Result<Self, Error> {
+            let mut nullifier_buf = [0u8; 32];
+            let h = input
+                .nullifier
+                .as_ref()
+                .ok_or(Error::Generic)?
+                .h
+                .as_ref()
+                .ok_or_else(|| Error::Generic)?;
+            nullifier_buf.copy_from_slice(&h.data);
+            let mut merkle_root_buf = [0u8; 32];
+            let h = input.merkle_root.as_ref().ok_or(Error::Generic)?;
+            merkle_root_buf.copy_from_slice(&h.data);
+            Ok(ABIInput {
+                nullifier: nullifier_buf,
+                merkle_root: merkle_root_buf,
+            })
+        }
+    }
+
+    impl TryFrom<&rpc::TransactionOutput> for Note {
+        type Error = Error;
+
+        fn try_from(output: &rpc::TransactionOutput) -> Result<Self, Error> {
+            let note = output.note.as_ref().ok_or(Error::Generic)?;
+
+            let value_commitment =
+                note.value_commitment.as_ref().ok_or(Error::Generic)?;
+            let mut value_commitment_buf = [0u8; 32];
+            value_commitment_buf.copy_from_slice(&value_commitment.data);
+
+            let nonce = note.nonce.as_ref().ok_or(Error::Generic)?;
+            let mut nonce_buf = [0u8; 24];
+            nonce_buf.copy_from_slice(&nonce.bs);
+
+            let r = note.r_g.as_ref().ok_or(Error::Generic)?;
             let mut r_buf = [0u8; 32];
-            utils::serialize_compressed_jubjub(&item.note.R(), &mut r_buf)
-                .unwrap();
-            let mut commitment_buf = [0u8; 32];
-            utils::serialize_bls_scalar(
-                item.note.value_commitment(),
-                &mut commitment_buf,
-            )
-            .unwrap();
+            r_buf.copy_from_slice(&r.y);
 
-            let mut pk_buf = [0u8; 32];
-            utils::serialize_compressed_jubjub(&item.note.pk_r(), &mut pk_buf)
-                .unwrap();
+            let pk_r = note.pk_r.as_ref().ok_or(Error::Generic)?;
+            let mut pk_r_buf = [0u8; 32];
+            pk_r_buf.copy_from_slice(&pk_r.y);
 
-            match item.note {
-                NoteVariant::Transparent(note) => Note {
-                    value_commitment: commitment_buf,
-                    nonce: note.nonce().0,
-                    r: r_buf,
-                    pk_r: pk_buf,
-                    idx: note.idx(),
-                    value: note.value(None),
-                    encrypted_value: [0u8; 24],
-                    encrypted_blinding_factor: BlindingFactorBytes::from(
-                        *note.encrypted_blinding_factor(),
-                    ),
-                },
-                NoteVariant::Obfuscated(note) => Note {
-                    value_commitment: commitment_buf,
-                    nonce: note.nonce().0,
-                    r: r_buf,
-                    pk_r: pk_buf,
-                    idx: note.idx(),
-                    value: 0,
-                    encrypted_value: *note.encrypted_value().unwrap(),
-                    encrypted_blinding_factor: BlindingFactorBytes::from(
-                        *note.encrypted_blinding_factor(),
-                    ),
-                },
+            let mut abi_note = Note {
+                value_commitment: value_commitment_buf,
+                nonce: nonce_buf,
+                r: r_buf,
+                pk_r: pk_r_buf,
+                idx: note.pos,
+                value: 0,
+                encrypted_value: [0u8; 24],
+                blinding_factor: [0u8; 32],
+                encrypted_blinding_factor: BlindingFactorBytes::default(),
+            };
+
+            let blinding_factor =
+                note.blinding_factor.as_ref().ok_or(Error::Generic)?;
+            match blinding_factor {
+                rpc::note::BlindingFactor::TransparentBlindingFactor(
+                    scalar,
+                ) => {
+                    abi_note.blinding_factor.copy_from_slice(&scalar.data);
+                }
+                rpc::note::BlindingFactor::EncryptedBlindingFactor(bytes) => {
+                    let mut encrypted_blinding_factor_buf = [0u8; 48];
+                    encrypted_blinding_factor_buf.copy_from_slice(&bytes);
+                    abi_note.encrypted_blinding_factor.0 =
+                        encrypted_blinding_factor_buf;
+                }
             }
+
+            let value = note.value.as_ref().ok_or(Error::Generic)?;
+            match value {
+                rpc::note::Value::TransparentValue(num) => {
+                    abi_note.value = *num;
+                }
+                rpc::note::Value::EncryptedValue(bytes) => {
+                    let mut encrypted_value_buf = [0u8; 24];
+                    encrypted_value_buf.copy_from_slice(&bytes);
+                    abi_note.encrypted_value = encrypted_value_buf;
+                }
+            }
+
+            Ok(abi_note)
         }
     }
 
-    impl From<Nullifier> for ABINullifier {
-        fn from(nullifier: Nullifier) -> Self {
-            ABINullifier(nullifier.to_bytes().unwrap())
-        }
-    }
+    #[cfg(test)]
+    mod test {
+        use super::*;
+        use phoenix::{crypto, Note as NoteImpl, NoteGenerator, SecretKey};
 
-    impl From<PublicKey> for ABIPublicKey {
-        fn from(pk: PublicKey) -> Self {
-            let mut abi_buf = [0u8; 64];
-            let mut a_buf = [0u8; 32];
-            utils::serialize_compressed_jubjub(&pk.A, &mut a_buf).unwrap();
-            abi_buf[0..32].copy_from_slice(&a_buf);
-            let mut b_buf = [0u8; 32];
-            utils::serialize_compressed_jubjub(&pk.B, &mut b_buf).unwrap();
-            abi_buf[32..64].copy_from_slice(&b_buf);
-            ABIPublicKey(abi_buf)
+        #[test]
+        fn convert_output_to_note() {
+            // Mandatory Phoenix init stuff
+            utils::init();
+
+            // First, let's make an actual phoenix tx output, and convert that to
+            // an RPC one.
+            let sk = SecretKey::default();
+            let pk = sk.public_key();
+            let value = 95;
+            let (note, blinding_factor) = TransparentNote::output(&pk, value);
+            let output = note.to_transaction_output(value, blinding_factor, pk);
+
+            let rpc_output: rpc::TransactionOutput = output.into();
+
+            let abi_output = Note::try_from(&rpc_output).unwrap();
+        }
+
+        #[test]
+        fn convert_input() {
+            // Mandatory Phoenix init stuff
+            utils::init();
+
+            // Create an actual input first, and then cast it to an RPC one.
+            let sk = SecretKey::default();
+            let pk = sk.public_key();
+            let value = 100;
+            let note = TransparentNote::output(&pk, value).0;
+            let merkle_opening = crypto::MerkleProof::mock(note.hash());
+            let input = note.to_transaction_input(merkle_opening, sk);
+
+            let rpc_input: rpc::TransactionInput = input.into();
+
+            let abi_input = ABIInput::try_from(&rpc_input).unwrap();
         }
     }
 }
