@@ -75,8 +75,11 @@ impl<'de> Deserialize<'de> for Proof {
 
 impl core::fmt::Debug for Proof {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        // TODO: implement
-        Ok(())
+        write!(f, "Proof(")?;
+        for i in 0..Proof::SIZE {
+            write!(f, "{:02x}", self.0[i])?;
+        }
+        write!(f, ")")
     }
 }
 
@@ -109,8 +112,11 @@ pub struct PublicKey([u8; 64]);
 
 impl core::fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        // TODO: implement
-        Ok(())
+        write!(f, "PublicKey(")?;
+        for i in 0..64 {
+            write!(f, "{:02x}", self.0[i])?;
+        }
+        write!(f, ")")
     }
 }
 
@@ -274,13 +280,23 @@ impl From<[u8; 48]> for BlindingFactorBytes {
     }
 }
 
+impl core::fmt::Debug for BlindingFactorBytes {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "BlindingFactorBytes(")?;
+        for i in 0..48 {
+            write!(f, "{:02x}", self.0[i])?;
+        }
+        write!(f, ")")
+    }
+}
+
 /// A Phoenix transaction output, consisting of all the fields found on a
 /// Phoenix note. The structure makes no distinction between transparent and
 /// obfuscated notes, and thus contains the necessary fields for both types
 /// to be represented by the [`Note`].
 /// N.B. this may mean some fields are empty, even though the note was converted
 /// correctly.
-#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct Note {
     value_commitment: [u8; 32],
     nonce: [u8; 24],
@@ -309,12 +325,6 @@ impl Note {
         let mut buffer = [0u8; Self::MAX * Self::SIZE];
         fermion::encode(t, &mut buffer)?;
         Ok(buffer)
-    }
-}
-
-impl core::fmt::Debug for Note {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(f, "a")
     }
 }
 
