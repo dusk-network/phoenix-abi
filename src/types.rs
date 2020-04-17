@@ -1,8 +1,10 @@
+#![warn(missing_docs)]
 use fermion::{self, Error};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 // TODO: this should come from `plonk_abi`
+/// A serialized PLONK proof.
 #[derive(Clone, Copy)]
 pub struct Proof([u8; Proof::SIZE]);
 
@@ -79,23 +81,29 @@ impl core::fmt::Debug for Proof {
 }
 
 impl Proof {
+    /// Size of an encoded [`Proof`] in bytes.
     pub const SIZE: usize = 1097;
 
+    /// Encodes a [`Proof`] to a contiguous byte array.
     pub fn encode<T: Serialize>(t: &T) -> Result<[u8; Proof::SIZE], Error> {
         let mut buffer = [0u8; Proof::SIZE];
         fermion::encode(t, &mut buffer)?;
         Ok(buffer)
     }
 
+    /// Builds a [`Proof`] from an array of bytes.
     pub fn from_bytes(bytes: [u8; Proof::SIZE]) -> Self {
         Proof(bytes)
     }
 
+    /// Returns the [`Proof`] as an array of bytes.
     pub fn to_bytes(&self) -> [u8; Proof::SIZE] {
         self.0
     }
 }
 
+/// A Phoenix public key, represented as a 64-byte array.
+/// The 64-byte array holds two scalars, both with a size of 32 bytes.
 #[derive(Clone, Copy)]
 pub struct PublicKey([u8; 64]);
 
@@ -178,6 +186,7 @@ impl From<[u8; 64]> for PublicKey {
 }
 
 impl PublicKey {
+    /// Returns the [`PublicKey`] as an array of bytes.
     pub fn as_bytes(&self) -> [u8; 64] {
         self.0
     }
@@ -185,6 +194,7 @@ impl PublicKey {
     // TODO: move this method as default implementation in a common trait for
     // `Note` and `Nullifier` once the following issue is fixed:
     // https://github.com/rust-lang/rust/issues/43408
+    /// Encode a [`PublicKey`] to a contiguous byte array.
     pub fn encode<T: Serialize>(t: &T) -> Result<[u8; 64], Error> {
         let mut buffer = [0u8; 64];
         fermion::encode(t, &mut buffer)?;
@@ -192,6 +202,7 @@ impl PublicKey {
     }
 }
 
+/// A byte array representing the blinding factor found on a Phoenix note.
 #[derive(Clone, Copy)]
 pub struct BlindingFactorBytes([u8; 48]);
 
@@ -263,6 +274,12 @@ impl From<[u8; 48]> for BlindingFactorBytes {
     }
 }
 
+/// A Phoenix transaction output, consisting of all the fields found on a
+/// Phoenix note. The structure makes no distinction between transparent and
+/// obfuscated notes, and thus contains the necessary fields for both types
+/// to be represented by the [`Note`].
+/// N.B. this may mean some fields are empty, even though the note was converted
+/// correctly.
 #[derive(Clone, Copy, Default, Serialize, Deserialize)]
 pub struct Note {
     value_commitment: [u8; 32],
@@ -277,12 +294,15 @@ pub struct Note {
 }
 
 impl Note {
+    /// Maximum amount of [`Note`]s in a Phoenix transaction.
     pub const MAX: usize = 3;
+    /// Total size of an encoded [`Note`] in bytes.
     pub const SIZE: usize = 240;
 
     // TODO: move this method as default implementation in a common trait for
     // `Note` and `Nullifier` once the following issue is fixed:
     // https://github.com/rust-lang/rust/issues/43408
+    /// Encode a [`Note`] to a contiguous byte array.
     pub fn encode<T: Serialize>(
         t: &T,
     ) -> Result<[u8; Self::MAX * Self::SIZE], Error> {
@@ -298,6 +318,9 @@ impl core::fmt::Debug for Note {
     }
 }
 
+/// A Phoenix transaction input, consisting of a nullifier and a merkle root.
+/// This only contains the non-sensitive information of a Phoenix input,
+/// and should correspond to what we receive from the wire.
 #[derive(Clone, Copy, Default, Serialize, Deserialize, Debug)]
 pub struct Input {
     nullifier: [u8; 32],
@@ -305,12 +328,15 @@ pub struct Input {
 }
 
 impl Input {
+    /// Maximum amount of [`Input`]s in a Phoenix transaction.
     pub const MAX: usize = 1;
+    /// Total size of an encoded [`Input`] in bytes.
     pub const SIZE: usize = 64;
 
     // TODO: move this method as default implementation in a common trait for
     // `Note` and `Nullifier` once the following issue is fixed:
     // https://github.com/rust-lang/rust/issues/43408
+    /// Encode an [`Input`] to a contiguous byte array.
     pub fn encode<T: Serialize>(
         t: &T,
     ) -> Result<[u8; Self::MAX * Self::SIZE], Error> {

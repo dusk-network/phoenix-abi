@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+/// A collection of different Phoenix data structures, in ABI form.
 pub mod types;
 
 pub use types::{Input, Note, Proof, PublicKey};
