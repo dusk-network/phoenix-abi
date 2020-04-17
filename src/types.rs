@@ -75,8 +75,7 @@ impl<'de> Deserialize<'de> for Proof {
 
 impl core::fmt::Debug for Proof {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        // TODO: implement
-        Ok(())
+        self.0[..].fmt(f)
     }
 }
 
@@ -109,8 +108,7 @@ pub struct PublicKey([u8; 64]);
 
 impl core::fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        // TODO: implement
-        Ok(())
+        self.0[..].fmt(f)
     }
 }
 
@@ -314,7 +312,18 @@ impl Note {
 
 impl core::fmt::Debug for Note {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(f, "a")
+        write!(f, "Note(\n")?;
+        write!(f, "value_commitment: {:?}\n", self.value_commitment)?;
+        write!(f, "nonce: {:?}\n", self.nonce)?;
+        write!(f, "r: {:?}\n", self.r)?;
+        write!(f, "pk_r: {:?}\n", self.pk_r)?;
+        write!(f, "idx: {}\n", self.idx)?;
+        write!(f, "value: {}\n", self.value)?;
+        write!(f, "encrypted_value: {:?}\n", self.encrypted_value)?;
+        write!(f, "blinding_factor: {:?}\n", self.blinding_factor)?;
+        write!(f, "encrypted_blinding_factor: ")?;
+        self.encrypted_blinding_factor.0[..].fmt(f)?;
+        write!(f, "\n)")
     }
 }
 
