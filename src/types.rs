@@ -1,10 +1,7 @@
-#![warn(missing_docs)]
-use fermion::{self, Error};
-use serde::de::Visitor;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
+use dataview::Pod;
 // TODO: this should come from `plonk_abi`
 /// A serialized PLONK proof.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Proof([u8; Proof::SIZE]);
 
@@ -13,63 +10,9 @@ impl Default for Proof {
         Proof([0u8; Proof::SIZE])
     }
 }
-
 impl AsRef<[u8]> for Proof {
     fn as_ref(&self) -> &[u8] {
         &self.0
-    }
-}
-
-impl Serialize for Proof {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeTuple;
-        let mut seq = serializer.serialize_tuple(self.0.len())?;
-        for byte in self.0.iter() {
-            seq.serialize_element(byte)?;
-        }
-        seq.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for Proof {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct ProofVisitor;
-
-        impl<'de> Visitor<'de> for ProofVisitor {
-            type Value = Proof;
-
-            fn expecting(
-                &self,
-                formatter: &mut ::core::fmt::Formatter,
-            ) -> ::core::fmt::Result {
-                formatter.write_str("1097 bytes")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Proof, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let mut bytes = [0u8; Proof::SIZE];
-                for (i, byte) in bytes.iter_mut().enumerate() {
-                    *byte = seq.next_element()?.ok_or_else(|| {
-                        serde::de::Error::invalid_length(
-                            i,
-                            &"expected 1097 bytes",
-                        )
-                    })?;
-                }
-
-                Ok(Proof(bytes))
-            }
-        }
-
-        deserializer.deserialize_tuple(Proof::SIZE, ProofVisitor)
     }
 }
 
@@ -87,13 +30,6 @@ impl Proof {
     /// Size of an encoded [`Proof`] in bytes.
     pub const SIZE: usize = 1097;
 
-    /// Encodes a [`Proof`] to a contiguous byte array.
-    pub fn encode<T: Serialize>(t: &T) -> Result<[u8; Proof::SIZE], Error> {
-        let mut buffer = [0u8; Proof::SIZE];
-        fermion::encode(t, &mut buffer)?;
-        Ok(buffer)
-    }
-
     /// Builds a [`Proof`] from an array of bytes.
     pub fn from_bytes(bytes: [u8; Proof::SIZE]) -> Self {
         Proof(bytes)
@@ -107,8 +43,15 @@ impl Proof {
 
 /// A Phoenix public key, represented as a 64-byte array.
 /// The 64-byte array holds two scalars, both with a size of 32 bytes.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PublicKey([u8; 64]);
+
+impl Default for PublicKey {
+    fn default() -> Self {
+        PublicKey([0u8; 64])
+    }
+}
 
 impl core::fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -120,68 +63,9 @@ impl core::fmt::Debug for PublicKey {
     }
 }
 
-impl Default for PublicKey {
-    fn default() -> Self {
-        PublicKey([0u8; 64])
-    }
-}
-
 impl AsRef<[u8]> for PublicKey {
     fn as_ref(&self) -> &[u8] {
         &self.0
-    }
-}
-
-impl Serialize for PublicKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeTuple;
-        let mut seq = serializer.serialize_tuple(self.0.len())?;
-        for byte in self.0.iter() {
-            seq.serialize_element(byte)?;
-        }
-        seq.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for PublicKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct PublicKeyVisitor;
-
-        impl<'de> Visitor<'de> for PublicKeyVisitor {
-            type Value = PublicKey;
-
-            fn expecting(
-                &self,
-                formatter: &mut ::core::fmt::Formatter,
-            ) -> ::core::fmt::Result {
-                formatter.write_str("64 bytes")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<PublicKey, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let mut bytes = [0u8; 64];
-                for (i, byte) in bytes.iter_mut().enumerate() {
-                    *byte = seq.next_element()?.ok_or_else(|| {
-                        serde::de::Error::invalid_length(
-                            i,
-                            &"expected 64 bytes",
-                        )
-                    })?;
-                }
-
-                Ok(PublicKey(bytes))
-            }
-        }
-
-        deserializer.deserialize_tuple(64, PublicKeyVisitor)
     }
 }
 
@@ -196,81 +80,18 @@ impl PublicKey {
     pub fn as_bytes(&self) -> [u8; 64] {
         self.0
     }
-
-    // TODO: move this method as default implementation in a common trait for
-    // `Note` and `Nullifier` once the following issue is fixed:
-    // https://github.com/rust-lang/rust/issues/43408
-    /// Encode a [`PublicKey`] to a contiguous byte array.
-    pub fn encode<T: Serialize>(t: &T) -> Result<[u8; 64], Error> {
-        let mut buffer = [0u8; 64];
-        fermion::encode(t, &mut buffer)?;
-        Ok(buffer)
-    }
 }
 
 /// A byte array representing the blinding factor found on a Phoenix note.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct BlindingFactorBytes([u8; 48]);
+
+unsafe impl Pod for BlindingFactorBytes {}
 
 impl Default for BlindingFactorBytes {
     fn default() -> Self {
         BlindingFactorBytes([0u8; 48])
-    }
-}
-
-impl Serialize for BlindingFactorBytes {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeTuple;
-        let mut seq = serializer.serialize_tuple(self.0.len())?;
-        for byte in self.0.iter() {
-            seq.serialize_element(byte)?;
-        }
-        seq.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for BlindingFactorBytes {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct BlindingFactorBytesVisitor;
-
-        impl<'de> Visitor<'de> for BlindingFactorBytesVisitor {
-            type Value = BlindingFactorBytes;
-
-            fn expecting(
-                &self,
-                formatter: &mut ::core::fmt::Formatter,
-            ) -> ::core::fmt::Result {
-                formatter.write_str("48 bytes")
-            }
-
-            fn visit_seq<A>(
-                self,
-                mut seq: A,
-            ) -> Result<BlindingFactorBytes, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let mut bytes = [0u8; 48];
-                for (i, byte) in bytes.iter_mut().enumerate() {
-                    *byte = seq.next_element()?.ok_or_else(|| {
-                        serde::de::Error::invalid_length(
-                            i,
-                            &"expected 48 bytes",
-                        )
-                    })?;
-                }
-
-                Ok(BlindingFactorBytes(bytes))
-            }
-        }
-
-        deserializer.deserialize_tuple(48, BlindingFactorBytesVisitor)
     }
 }
 
@@ -296,7 +117,8 @@ impl core::fmt::Debug for BlindingFactorBytes {
 /// to be represented by the [`Note`].
 /// N.B. this may mean some fields are empty, even though the note was converted
 /// correctly.
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Pod)]
 pub struct Note {
     value_commitment: [u8; 32],
     nonce: [u8; 24],
@@ -314,24 +136,13 @@ impl Note {
     pub const MAX: usize = 3;
     /// Total size of an encoded [`Note`] in bytes.
     pub const SIZE: usize = 240;
-
-    // TODO: move this method as default implementation in a common trait for
-    // `Note` and `Nullifier` once the following issue is fixed:
-    // https://github.com/rust-lang/rust/issues/43408
-    /// Encode a [`Note`] to a contiguous byte array.
-    pub fn encode<T: Serialize>(
-        t: &T,
-    ) -> Result<[u8; Self::MAX * Self::SIZE], Error> {
-        let mut buffer = [0u8; Self::MAX * Self::SIZE];
-        fermion::encode(t, &mut buffer)?;
-        Ok(buffer)
-    }
 }
 
 /// A Phoenix transaction input, consisting of a nullifier and a merkle root.
 /// This only contains the non-sensitive information of a Phoenix input,
 /// and should correspond to what we receive from the wire.
-#[derive(Clone, Copy, Default, Serialize, Deserialize, Debug)]
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug, Pod)]
 pub struct Input {
     nullifier: [u8; 32],
     merkle_root: [u8; 32],
@@ -342,18 +153,6 @@ impl Input {
     pub const MAX: usize = 1;
     /// Total size of an encoded [`Input`] in bytes.
     pub const SIZE: usize = 64;
-
-    // TODO: move this method as default implementation in a common trait for
-    // `Note` and `Nullifier` once the following issue is fixed:
-    // https://github.com/rust-lang/rust/issues/43408
-    /// Encode an [`Input`] to a contiguous byte array.
-    pub fn encode<T: Serialize>(
-        t: &T,
-    ) -> Result<[u8; Self::MAX * Self::SIZE], Error> {
-        let mut buffer = [0u8; Self::MAX * Self::SIZE];
-        fermion::encode(t, &mut buffer)?;
-        Ok(buffer)
-    }
 }
 
 #[cfg(feature = "std")]
@@ -540,7 +339,9 @@ mod convert {
 
             let rpc_output: rpc::TransactionOutput = output.into();
 
-            let abi_output = Note::try_from(&rpc_output).unwrap();
+            let abi_output = Note::try_from(&rpc_output);
+
+            assert!(abi_output.is_ok())
         }
 
         #[test]
@@ -558,7 +359,9 @@ mod convert {
 
             let rpc_input: rpc::TransactionInput = input.into();
 
-            let abi_input = ABIInput::try_from(&rpc_input).unwrap();
+            let abi_input = ABIInput::try_from(&rpc_input);
+
+            assert!(abi_input.is_ok())
         }
     }
 }

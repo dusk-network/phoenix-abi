@@ -10,15 +10,13 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-
-serde = { version = "*", default-features = false }
-fermion = { version = "0.2", default-features = false }
+dataview = { git = "https://github.com/dusk-network/dataview.git" }
 phoenix = { git = "https://github.com/dusk-network/phoenix", optional = true }
 
-
 [features]
-default = ["std"]
-std = ["fermion/std", "phoenix"]
+default = ["std", "debug"]
+debug = []
+std = ["phoenix"]
 
 # This is a temporary fix until we stop to use zexe; it's needed to replace
 # in the dependency graph the library below with the revision specified.
