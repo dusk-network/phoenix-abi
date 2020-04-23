@@ -47,6 +47,8 @@ impl Proof {
 #[derive(Clone, Copy)]
 pub struct PublicKey([u8; 64]);
 
+unsafe impl Pod for PublicKey {}
+
 impl Default for PublicKey {
     fn default() -> Self {
         PublicKey([0u8; 64])
