@@ -1,6 +1,6 @@
 //! The `phoenix-abi` crate contains the ABI to enable phoenix's call  from
 //! Smart Contract running in the Rusk VM
-
+#![feature(trivial_bounds)]
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 

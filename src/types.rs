@@ -2,17 +2,21 @@ use dataview::Pod;
 // TODO: this should come from `plonk_abi`
 /// A serialized PLONK proof.
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Proof([u8; Proof::SIZE]);
+#[derive(Clone, Copy, Pod)]
+pub struct Proof {
+    bytes: [u8; Proof::SIZE],
+}
 
 impl Default for Proof {
     fn default() -> Self {
-        Proof([0u8; Proof::SIZE])
+        Proof {
+            bytes: [0u8; Proof::SIZE],
+        }
     }
 }
 impl AsRef<[u8]> for Proof {
     fn as_ref(&self) -> &[u8] {
-        &self.0
+        &self.bytes
     }
 }
 
@@ -20,7 +24,7 @@ impl core::fmt::Debug for Proof {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "Proof(")?;
         for i in 0..Proof::SIZE {
-            write!(f, "{:02x}", self.0[i])?;
+            write!(f, "{:02x}", self.bytes[i])?;
         }
         write!(f, ")")
     }
@@ -32,12 +36,12 @@ impl Proof {
 
     /// Builds a [`Proof`] from an array of bytes.
     pub fn from_bytes(bytes: [u8; Proof::SIZE]) -> Self {
-        Proof(bytes)
+        Proof { bytes }
     }
 
     /// Returns the [`Proof`] as an array of bytes.
     pub fn to_bytes(&self) -> [u8; Proof::SIZE] {
-        self.0
+        self.bytes
     }
 }
 
